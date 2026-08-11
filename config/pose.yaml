@@ -1,0 +1,15 @@
+/**:
+  ros__parameters:
+    solution: pose
+    input_msg: tb_jpeg
+    input_topic: /tbmem_jpeg
+    detections_topic: /detections
+    publish_detections: true
+    process_every_n: 3
+    inference_width: 256
+    model_complexity: 0
+    smooth_landmarks: true
+    min_detection_confidence: 0.5
+    min_tracking_confidence: 0.5
+    min_visibility: 0.5
+    bbox_padding: 0.05

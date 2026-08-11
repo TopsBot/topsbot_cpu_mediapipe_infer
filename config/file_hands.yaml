@@ -1,0 +1,11 @@
+/**:
+  ros__parameters:
+    solution: hands
+    input_msg: file
+    image_file: ""
+    output_image: /tmp/topsbot_mediapipe/out.jpg
+    publish_detections: false
+    static_image_mode: true
+    max_num_hands: 2
+    model_complexity: 0
+    inference_width: 0

@@ -1,0 +1,15 @@
+# Default pipeline: Hands + JPEG zero-copy
+/**:
+  ros__parameters:
+    solution: hands
+    input_msg: tb_jpeg
+    input_topic: /tbmem_jpeg
+    detections_topic: /detections
+    publish_detections: true
+    process_every_n: 3
+    inference_width: 256
+    max_num_hands: 2
+    model_complexity: 0
+    min_detection_confidence: 0.5
+    min_tracking_confidence: 0.5
+    bbox_padding: 0.05

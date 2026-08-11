@@ -1,0 +1,11 @@
+/**:
+  ros__parameters:
+    solution: face_detection
+    input_msg: tb_jpeg
+    input_topic: /tbmem_jpeg
+    detections_topic: /detections
+    publish_detections: true
+    process_every_n: 2
+    inference_width: 320
+    model_selection: 0
+    min_detection_confidence: 0.5
