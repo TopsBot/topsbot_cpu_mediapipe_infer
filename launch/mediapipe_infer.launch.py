@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 import os
+import sys
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetEnvironmentVariable
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import yaml
+
+_launch_dir = os.path.dirname(os.path.abspath(__file__))
+if _launch_dir not in sys.path:
+    sys.path.insert(0, _launch_dir)
+from model_utils import ensure_hands_models  # noqa: E402
 
 
 def _load_yaml(path: str) -> dict:
@@ -45,14 +51,20 @@ def _launch_setup(context, *args, **kwargs):
                 overrides[key] = val
     params.update(overrides)
 
-    node = Node(
-        package="topsbot_cpu_mediapipe_infer",
-        executable="mediapipe_infer",
-        name="mediapipe_infer",
-        output="screen",
-        parameters=[params],
+    actions = []
+    nb_dir = ensure_hands_models(context, params.get("solution", "hands"))
+    if nb_dir:
+        actions.append(SetEnvironmentVariable("MEDIAPIPE_NB_DIR", nb_dir))
+    actions.append(
+        Node(
+            package="topsbot_cpu_mediapipe_infer",
+            executable="mediapipe_infer",
+            name="mediapipe_infer",
+            output="screen",
+            parameters=[params],
+        )
     )
-    return [node]
+    return actions
 
 
 def generate_launch_description():
@@ -69,6 +81,16 @@ def generate_launch_description():
             DeclareLaunchArgument("publish_detections", default_value=""),
             DeclareLaunchArgument("process_every_n", default_value=""),
             DeclareLaunchArgument("inference_width", default_value=""),
+            DeclareLaunchArgument(
+                "models_dir",
+                default_value="~/topsbot/models",
+                description="Directory containing Hands NPU .nb models",
+            ),
+            DeclareLaunchArgument(
+                "auto_download_models",
+                default_value="true",
+                description="Auto download Hands NPU models if missing",
+            ),
             OpaqueFunction(function=_launch_setup),
         ]
     )

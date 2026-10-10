@@ -61,6 +61,7 @@ class MediapipeInferNode(Node):
         self.declare_parameter("smooth_landmarks", True)
         self.declare_parameter("bbox_padding", 0.05)
         self.declare_parameter("static_image_mode", False)
+        self.declare_parameter("infer_log_interval_sec", 2.0)
 
         self.solution_name = str(self.get_parameter("solution").value).strip().lower()
         self.input_msg = str(self.get_parameter("input_msg").value).strip().lower()
@@ -73,6 +74,15 @@ class MediapipeInferNode(Node):
         self.stats_frames = 0
         self.stats_infers = 0
         self.fps = 0.0
+        self.infer_log_interval_sec = max(
+            0.0, float(self.get_parameter("infer_log_interval_sec").value)
+        )
+        self._infer_window_n = 0
+        self._infer_window_sum_ms = 0.0
+        self._infer_window_min_ms = float("inf")
+        self._infer_window_max_ms = 0.0
+        self._infer_log_at = time.monotonic()
+        self._last_infer_ms = 0.0
 
         self.solution: SolutionBase = self._create_solution(self.solution_name)
         self.solution.open(self._solution_params())
@@ -260,17 +270,16 @@ class MediapipeInferNode(Node):
         if self.frame_count % self.process_every_n != 0:
             return
         self.last_scale = scale
-        self.infer_future = self.infer_executor.submit(self.solution.infer, rgb)
+        self.infer_future = self.infer_executor.submit(self._run_infer, rgb)
 
     def _process_bgr(self, bgr: np.ndarray, stamp: TimeMsg, sync: bool = False) -> None:
         self.frame_count += 1
         full_h, full_w = bgr.shape[:2]
         rgb, scale_x, scale_y = self._make_infer_rgb(bgr)
         if sync:
-            t0 = time.monotonic()
-            self.last_result = self.solution.infer(rgb)
+            self.last_result = self._run_infer(rgb)
             self.last_scale = (scale_x, scale_y)
-            infer_ms = (time.monotonic() - t0) * 1000.0
+            infer_ms = self._last_infer_ms
             self.stats_infers += 1
         else:
             self._collect_inference()
@@ -288,6 +297,39 @@ class MediapipeInferNode(Node):
         self._update_rates()
         if self.det_pub is not None:
             self._publish_detections(stamp, infer_ms)
+
+    def _run_infer(self, rgb: np.ndarray) -> InferResult:
+        """Time MediaPipe Solution.process(), which is all infer() does."""
+        t0 = time.perf_counter()
+        result = self.solution.infer(rgb)
+        self._last_infer_ms = (time.perf_counter() - t0) * 1000.0
+        self._note_infer_ms(self._last_infer_ms)
+        return result
+
+    def _note_infer_ms(self, infer_ms: float) -> None:
+        self._infer_window_n += 1
+        self._infer_window_sum_ms += infer_ms
+        self._infer_window_min_ms = min(self._infer_window_min_ms, infer_ms)
+        self._infer_window_max_ms = max(self._infer_window_max_ms, infer_ms)
+        now = time.monotonic()
+        due = (
+            self.input_msg == "file"
+            or now - self._infer_log_at >= self.infer_log_interval_sec
+        )
+        if self.infer_log_interval_sec <= 0.0 or not due or self._infer_window_n <= 0:
+            return
+        n = self._infer_window_n
+        avg = self._infer_window_sum_ms / n
+        self.get_logger().info(
+            f"mediapipe process solution={self.solution_name} "
+            f"n={n} last={infer_ms:.1f}ms avg={avg:.1f}ms "
+            f"min={self._infer_window_min_ms:.1f}ms max={self._infer_window_max_ms:.1f}ms"
+        )
+        self._infer_window_n = 0
+        self._infer_window_sum_ms = 0.0
+        self._infer_window_min_ms = float("inf")
+        self._infer_window_max_ms = 0.0
+        self._infer_log_at = now
 
     def _update_rates(self) -> None:
         self.stats_frames += 1

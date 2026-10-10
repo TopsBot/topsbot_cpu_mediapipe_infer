@@ -6,7 +6,7 @@
     input_topic: /tbmem_jpeg
     detections_topic: /detections
     publish_detections: true
-    process_every_n: 3
+    process_every_n: 1
     inference_width: 256
     max_num_hands: 2
     model_complexity: 0
